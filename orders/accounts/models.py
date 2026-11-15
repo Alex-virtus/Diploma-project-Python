@@ -1,6 +1,12 @@
+import hashlib
+import secrets
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 
 class UserManager(BaseUserManager):
@@ -62,6 +68,59 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class ConfirmEmailToken(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="email_confirmation_token",
+        verbose_name="Пользователь",
+    )
+    token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        editable=False,
+        verbose_name="Хеш токена",
+    )
+    created_at = models.DateTimeField(
+        default=timezone.now,
+        editable=False,
+        verbose_name="Создан",
+    )
+    expires_at = models.DateTimeField(verbose_name="Истекает")
+
+    class Meta:
+        verbose_name = "Токен подтверждения email"
+        verbose_name_plural = "Токены подтверждения email"
+
+    def __str__(self):
+        return f"Токен подтверждения для {self.user.email}"
+
+    @classmethod
+    def issue_for(cls, user):
+        raw_token = secrets.token_urlsafe(32)
+        now = timezone.now()
+
+        token, _ = cls.objects.update_or_create(
+            user=user,
+            defaults={
+                "token_hash": hashlib.sha256(
+                    raw_token.encode('utf-8')
+                ).hexdigest(),
+                "created_at": now,
+                "expires_at": now + timedelta(hours=24)
+            },
+        )
+        return token, raw_token
+
+    @classmethod
+    def find_valid(cls, raw_token):
+        token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+
+        return ((cls.objects.select_related("user")
+                .filter(token_hash=token_hash, expires_at__gt=timezone.now()))
+                .first())
 
 
 class Address(models.Model):
