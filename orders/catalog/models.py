@@ -87,6 +87,11 @@ class Product(models.Model):
         verbose_name="Категория",
     )
     name = models.CharField(max_length=255, verbose_name="Название")
+    description = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Описание",
+    )
 
     class Meta:
         verbose_name = "Товар"
