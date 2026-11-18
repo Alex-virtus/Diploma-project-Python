@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'catalog',
     'purchases',
     'rest_framework',
+    'rest_framework.authtoken',
 ]
 
 MIDDLEWARE = [
@@ -152,3 +153,11 @@ SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 if EMAIL_USE_TLS and EMAIL_USE_SSL:
     raise ValueError("EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled")
+
+
+# Django REST framework
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_fraemwork.authentication.TokenAuthentication',
+    ],
+}
