@@ -6,6 +6,7 @@ from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework.authtoken.models import Token
 
 from .models import ConfirmEmailToken
 
@@ -82,3 +83,55 @@ class RegistrationAndConfirmationTests(APITestCase):
             status.HTTP_400_BAD_REQUEST,
         )
         self.assertFalse(User.objects.get(email=self.email).is_active)
+
+    def create_user(self, is_active=True):
+        return User.objects.create_user(
+            email=self.email,
+            password=self.password,
+            is_active=is_active,
+        )
+
+    def test_login_returns_token_for_active_user(self):
+        user = self.create_user()
+
+        response = self.client.post(
+            reverse("login"),
+            {"email": self.email, "password": self.password},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["token"],
+            Token.objects.get(user=user).key,
+        )
+
+    def test_login_rejects_wrong_password(self):
+        user = self.create_user()
+
+        response = self.client.post(
+            reverse("login"),
+            {"email": self.email, "password": "wrong-password"},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.assertFalse(Token.objects.filter(user=user).exists())
+
+    def test_login_rejects_inactive_user(self):
+        user = self.create_user(is_active=False)
+
+        response = self.client.post(
+            reverse("login"),
+            {"email": self.email, "password": self.password},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.assertFalse(Token.objects.filter(user=user).exists())

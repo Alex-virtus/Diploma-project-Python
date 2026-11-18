@@ -6,12 +6,14 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import ConfirmEmailToken
-from .serializers import ConfirmEmailSerializer, RegistrationSerializer
+from .serializers import (ConfirmEmailSerializer, RegistrationSerializer,
+                          LoginSerializer)
 
 
 logger = logging.getLogger(__name__)
@@ -98,5 +100,24 @@ class ConfirmEmailView(APIView):
 
         return Response(
             {"detail": "Email подтверждён."},
+            status=status.HTTP_200_OK,
+        )
+
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.validated_data["user"]
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response(
+            {"token": token.key},
             status=status.HTTP_200_OK,
         )
