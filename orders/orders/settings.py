@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'accounts',
     'catalog',
     'purchases',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
@@ -132,8 +133,22 @@ STATIC_URL = 'static/'
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+def env_bool(name, default):
+    value = os.getenv(name, default).strip().lower()
+    if value not in {"true", "false"}:
+        raise ValueError(f"{name} must be either 'True' or 'False'")
+    return value == "true"
+
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", "False")
+EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", "False")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ValueError("EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled")
