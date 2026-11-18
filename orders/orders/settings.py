@@ -158,6 +158,6 @@ if EMAIL_USE_TLS and EMAIL_USE_SSL:
 # Django REST framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_fraemwork.authentication.TokenAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ],
 }
