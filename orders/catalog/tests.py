@@ -1,8 +1,10 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
 
 from .models import Category, Product, ProductInfo, Shop
@@ -164,3 +166,95 @@ class ProductListAPITests(APITestCase):
             response.status_code,
             status.HTTP_400_BAD_REQUEST,
         )
+
+
+class PriceImportAPITests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.supplier = User.objects.create_user(
+            email="import-supplier@example.com",
+            password="Test-password-123!",
+            role=User.Role.SUPPLIER,
+            is_active=True,
+        )
+        cls.buyer = User.objects.create_user(
+            email="import-buyer@example.com",
+            password="Test-password-123!",
+            role=User.Role.BUYER,
+            is_active=True,
+        )
+        cls.supplier_token = Token.objects.create(user=cls.supplier)
+        cls.buyer_token = Token.objects.create(user=cls.buyer)
+
+    def upload(self, content):
+        return SimpleUploadedFile(
+            "price.yaml",
+            content.encode("utf-8"),
+            content_type="application/x-yaml",
+        )
+
+    def test_supplier_can_import_yaml_price(self):
+        yaml_content = """
+shop: Test Supplier Shop
+categories:
+  - id: 1
+    name: Test Category
+goods:
+  - id: 1001
+    category: 1
+    name: Test Product
+    price: 10.50
+    price_rrc: 12.00
+    quantity: 7
+    parameters:
+      Color: blue
+"""
+
+        response = self.client.post(
+            reverse("price-import"),
+            {"file": self.upload(yaml_content)},
+            HTTP_AUTHORIZATION=f"Token {self.supplier_token.key}",
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["imported"], 1)
+        self.assertTrue(
+            ProductInfo.objects.filter(
+                shop__user=self.supplier,
+                external_id=1001,
+                quantity=7,
+            ).exists()
+        )
+
+    def test_buyer_cannot_import_yaml_price(self):
+        response = self.client.post(
+            reverse("price-import"),
+            {"file": self.upload("shop: Test")},
+            HTTP_AUTHORIZATION=f"Token {self.buyer_token.key}",
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(ProductInfo.objects.count(), 0)
+
+    def test_anonymous_user_cannot_import_yaml_price(self):
+        response = self.client.post(
+            reverse("price-import"),
+            {"file": self.upload("shop: Test")},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(ProductInfo.objects.count(), 0)
+
+    def test_invalid_yaml_returns_bad_request(self):
+        response = self.client.post(
+            reverse("price-import"),
+            {"file": self.upload("goods: [")},
+            HTTP_AUTHORIZATION=f"Token {self.supplier_token.key}",
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(ProductInfo.objects.count(), 0)

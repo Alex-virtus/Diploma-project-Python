@@ -1,10 +1,17 @@
+import yaml
+
 from django.db.models import Q
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import AllowAny
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import ProductInfo
 from .serializers import ProductInfoSerializer
+from .permissions import IsSupplier
+from .services import PriceImportError, import_shop_data
 
 
 class ProductListView(generics.ListAPIView):
@@ -44,3 +51,40 @@ class ProductListView(generics.ListAPIView):
                 queryset = queryset.filter(**{field: object_id})
 
         return queryset
+
+
+class PriceImportView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [IsAuthenticated, IsSupplier]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        if uploaded_file is None:
+            return Response(
+                {"detail": "Передайте YAML-файл в поле 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            data = yaml.safe_load(uploaded_file.read())
+        except (yaml.YAMLError, UnicodeDecodeError):
+            return Response(
+                {"detail": "Не удалось прочитать корректный YAML-файл."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            shop = import_shop_data(data, request.user)
+        except PriceImportError as error:
+            return Response(
+                {"detail": str(error)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                "detail": f"Прайс магазина «{shop.name}» обновлён.",
+                "imported": len(data["goods"]),
+            },
+            status=status.HTTP_200_OK,
+        )
