@@ -9,11 +9,13 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.generics import DestroyAPIView, ListCreateAPIView
 from rest_framework.views import APIView
 
-from .models import ConfirmEmailToken
+from .models import ConfirmEmailToken, Address
+from .permissions import IsBuyer
 from .serializers import (ConfirmEmailSerializer, RegistrationSerializer,
-                          LoginSerializer)
+                          LoginSerializer, AddressSerializer)
 
 
 logger = logging.getLogger(__name__)
@@ -121,3 +123,22 @@ class LoginView(APIView):
             {"token": token.key},
             status=status.HTTP_200_OK,
         )
+
+
+class AddressListCreateView(ListCreateAPIView):
+    serializer_class = AddressSerializer
+    permission_classes = [IsBuyer]
+
+    def get_queryset(self):
+        return Address.objects.filter(user=self.request.user).order_by("id")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class AddressDeleteView(DestroyAPIView):
+    serializer_class = AddressSerializer
+    permission_classes = [IsBuyer]
+
+    def get_queryset(self):
+        return Address.objects.filter(user=self.request.user)

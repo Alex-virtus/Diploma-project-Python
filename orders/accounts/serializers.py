@@ -3,6 +3,8 @@ from django.contrib.auth.password_validation import validate_password as django_
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 
+from .models import Address
+
 User = get_user_model()
 
 
@@ -58,3 +60,19 @@ class LoginSerializer(serializers.Serializer):
 
         attrs["user"] = user
         return attrs
+
+
+class AddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Address
+        fields = (
+            "id",
+            "city",
+            "street",
+            "house",
+            "structure",
+            "building",
+            "apartment",
+            "phone",
+        )
+        read_only_fields = ("id",)
