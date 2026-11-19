@@ -48,3 +48,7 @@ class CartItemAddSerializer(serializers.Serializer):
 
 class CartItemQuantitySerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1)
+
+
+class OrderConfirmationSerializer(serializers.Serializer):
+    address_id = serializers.IntegerField(min_value=1)
