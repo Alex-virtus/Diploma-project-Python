@@ -448,3 +448,99 @@ class OrderConfirmationAPITests(APITestCase):
             status.HTTP_401_UNAUTHORIZED,
         )
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_order_history_lists_only_own_confirmed_orders(self):
+        order = Order.objects.create(
+            user=self.buyer,
+            state=Order.State.NEW,
+            contact=self.address,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product_info=self.offer_one,
+            quantity=2,
+            unit_price=Decimal("9.00"),
+        )
+
+        self.create_basket((self.offer_two, 1))
+        Order.objects.create(
+            user=self.other_buyer,
+            state=Order.State.NEW,
+            contact=self.other_address,
+        )
+
+        response = self.client.get(reverse("order-confirmation"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], order.id)
+        self.assertEqual(response.data[0]["state"], Order.State.NEW)
+        self.assertEqual(
+            Decimal(str(response.data[0]["total"])),
+            Decimal("18.00"),
+        )
+        self.assertEqual(
+            response.data[0]["items"][0]["unit_price"],
+            "9.00",
+        )
+
+    def test_order_detail_returns_saved_order_data(self):
+        order = Order.objects.create(
+            user=self.buyer,
+            state=Order.State.NEW,
+            contact=self.address,
+        )
+        OrderItem.objects.create(
+            order=order,
+            product_info=self.offer_one,
+            quantity=2,
+            unit_price=Decimal("9.00"),
+        )
+
+        response = self.client.get(
+            reverse("order-detail", kwargs={"pk": order.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], order.id)
+        self.assertEqual(response.data["contact"]["id"], self.address.id)
+        self.assertEqual(
+            Decimal(str(response.data["total"])),
+            Decimal("18.00"),
+        )
+        self.assertEqual(
+            response.data["items"][0]["unit_price"],
+            "9.00",
+        )
+
+    def test_buyer_cannot_view_another_users_order(self):
+        order = Order.objects.create(
+            user=self.other_buyer,
+            state=Order.State.NEW,
+            contact=self.other_address,
+        )
+
+        response = self.client.get(
+            reverse("order-detail", kwargs={"pk": order.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_anonymous_user_cannot_view_order_history(self):
+        self.client.credentials()
+
+        response = self.client.get(reverse("order-confirmation"))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_supplier_cannot_view_order_history(self):
+        supplier_token, _ = Token.objects.get_or_create(
+            user=self.supplier_one
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Token {supplier_token.key}"
+        )
+
+        response = self.client.get(reverse("order-confirmation"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

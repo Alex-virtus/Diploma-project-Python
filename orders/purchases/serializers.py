@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from .models import OrderItem
+from accounts.serializers import AddressSerializer
+from .models import OrderItem, Order
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -52,3 +53,49 @@ class CartItemQuantitySerializer(serializers.Serializer):
 
 class OrderConfirmationSerializer(serializers.Serializer):
     address_id = serializers.IntegerField(min_value=1)
+
+
+class OrderItemHistorySerializer(serializers.ModelSerializer):
+    product_info = serializers.IntegerField(
+        source="product_info_id",
+        read_only=True,
+    )
+    name = serializers.CharField(
+        source="product_info.product.name",
+        read_only=True,
+    )
+    supplier = serializers.CharField(
+        source="product_info.shop.name",
+        read_only=True,
+    )
+    total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = (
+            "product_info",
+            "name",
+            "supplier",
+            "quantity",
+            "unit_price",
+            "total",
+        )
+
+    def get_total(self, obj):
+        return obj.total_price
+
+
+class OrderHistorySerializer(serializers.ModelSerializer):
+    contact = AddressSerializer(read_only=True)
+    items = OrderItemHistorySerializer(many=True, read_only=True)
+    total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = ("id", "dt", "state", "contact", "items", "total")
+
+    def get_total(self, obj):
+        return sum(
+            (item.total_price for item in obj.items.all()),
+            start=0,
+        )

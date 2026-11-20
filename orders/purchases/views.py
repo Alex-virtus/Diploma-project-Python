@@ -21,6 +21,7 @@ from .serializers import (
     CartItemQuantitySerializer,
     CartItemSerializer,
     OrderConfirmationSerializer,
+    OrderHistorySerializer
 )
 
 
@@ -347,3 +348,35 @@ class OrderConfirmationView(APIView):
             )
 
         return Response(response_data, status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+        orders = (
+            Order.objects
+            .filter(user=request.user)
+            .exclude(state=Order.State.BASKET)
+            .select_related("contact")
+            .prefetch_related(
+                "items__product_info__product",
+                "items__product_info__shop",
+            )
+            .order_by("-dt")
+        )
+        return Response(OrderHistorySerializer(orders, many=True).data)
+
+
+class OrderDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsBuyer]
+
+    def get(self, request, pk):
+        order = get_object_or_404(
+            Order.objects
+            .filter(user=request.user)
+            .exclude(state=Order.State.BASKET)
+            .select_related("contact")
+            .prefetch_related(
+                "items__product_info__product",
+                "items__product_info__shop",
+            ),
+            pk=pk,
+        )
+        return Response(OrderHistorySerializer(order).data)
